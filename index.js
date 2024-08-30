@@ -1,80 +1,85 @@
-const { ethers } = require('ethers')
-const prompt = require('prompt-sync')()
-require('dotenv').config()
+const Web3 = require('web3');
+const { PRIVATE_KEY, WALLET_ADDRESS, ITERATIONS, INTERVAL } = process.env;
 
-const RPC_URL = 'RPC'
-const CHAIN_ID = NUMBER
-const provider = new ethers.JsonRpcProvider(RPC_URL, CHAIN_ID)
+// Configuration
+const RPC_URLS = {
+    base: 'https://base-sepolia-rpc.publicnode.com',
+    arb: 'https://arbitrum-sepolia.infura.io/v3/a9068de0f8564411a3c7aeb6f2fb0c3e',
+    blast: 'https://sepolia.blast.io',
+    op: 'https://optimism-sepolia.blockpi.network/v1/rpc/public'
+};
 
-function generateRandomAddress() {
-  return ethers.Wallet.createRandom().address
+const CHAIN_IDS = {
+    base: 84532,  // Replace with correct chain ID
+    arb: 421614,  // Replace with correct chain ID
+    blast: 168587773,  // Replace with correct chain ID
+    op: 11155420  // Replace with correct chain ID
+};
+
+const BRIDGE_CONTRACTS = {
+    base: '0x30A0155082629940d4bd9Cd41D6EF90876a0F1b5',
+    arb: '0x8D86c3573928CE125f9b2df59918c383aa2B514D',
+    blast: '0x1D5FD4ed9bDdCCF5A74718B556E9d15743cB26A2',
+    op: '0xF221750e52aA080835d2957F2Eed0d5d7dDD8C38'
+};
+
+// Replace the following with actual ABI obtained from the contract
+const BRIDGE_ABIS = {
+    base: [{"inputs":[{"internalType":"address","name":"_logic","type":"address"},{"internalType":"address","name":"admin_","type":"address"},{"internalType":"bytes","name":"_data","type":"bytes"}],"stateMutability":"payable","type":"constructor"},{"anonymous":false,"inputs":[{"indexed":false,"internalType":"address","name":"previousAdmin","type":"address"},{"indexed":false,"internalType":"address","name":"newAdmin","type":"address"}],"name":"AdminChanged","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"beacon","type":"address"}],"name":"BeaconUpgraded","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"implementation","type":"address"}],"name":"Upgraded","type":"event"},{"stateMutability":"payable","type":"fallback"},{"stateMutability":"payable","type":"receive"}],
+    arb: [{"inputs":[{"internalType":"address","name":"_logic","type":"address"},{"internalType":"address","name":"admin_","type":"address"},{"internalType":"bytes","name":"_data","type":"bytes"}],"stateMutability":"payable","type":"constructor"},{"anonymous":false,"inputs":[{"indexed":false,"internalType":"address","name":"previousAdmin","type":"address"},{"indexed":false,"internalType":"address","name":"newAdmin","type":"address"}],"name":"AdminChanged","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"beacon","type":"address"}],"name":"BeaconUpgraded","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"implementation","type":"address"}],"name":"Upgraded","type":"event"},{"stateMutability":"payable","type":"fallback"},{"stateMutability":"payable","type":"receive"}],
+    blast: [{"inputs":[{"internalType":"address","name":"_logic","type":"address"},{"internalType":"address","name":"admin_","type":"address"},{"internalType":"bytes","name":"_data","type":"bytes"}],"stateMutability":"payable","type":"constructor"},{"anonymous":false,"inputs":[{"indexed":false,"internalType":"address","name":"previousAdmin","type":"address"},{"indexed":false,"internalType":"address","name":"newAdmin","type":"address"}],"name":"AdminChanged","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"beacon","type":"address"}],"name":"BeaconUpgraded","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"implementation","type":"address"}],"name":"Upgraded","type":"event"},{"stateMutability":"payable","type":"fallback"},{"stateMutability":"payable","type":"receive"}],
+    op: [{"inputs":[{"internalType":"address","name":"_logic","type":"address"},{"internalType":"address","name":"admin_","type":"address"},{"internalType":"bytes","name":"_data","type":"bytes"}],"stateMutability":"payable","type":"constructor"},{"anonymous":false,"inputs":[{"indexed":false,"internalType":"address","name":"previousAdmin","type":"address"},{"indexed":false,"internalType":"address","name":"newAdmin","type":"address"}],"name":"AdminChanged","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"beacon","type":"address"}],"name":"BeaconUpgraded","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"implementation","type":"address"}],"name":"Upgraded","type":"event"},{"stateMutability":"payable","type":"fallback"},{"stateMutability":"payable","type":"receive"}]
+};
+
+function getWeb3(chain) {
+    return new Web3(new Web3.providers.HttpProvider(RPC_URLS[chain]));
+}
+
+async function bridge(fromChain, toChain, amount) {
+    const web3 = getWeb3(fromChain);
+    const bridgeContract = new web3.eth.Contract(BRIDGE_ABIS[fromChain], BRIDGE_CONTRACTS[fromChain]);
+
+    const txData = bridgeContract.methods.bridge(amount, toChain).encodeABI();
+    const gasPrice = await web3.eth.getGasPrice();
+    const nonce = await web3.eth.getTransactionCount(WALLET_ADDRESS);
+
+    const tx = {
+        from: WALLET_ADDRESS,
+        to: BRIDGE_CONTRACTS[fromChain],
+        gas: 2000000,
+        gasPrice: gasPrice,
+        nonce: nonce,
+        data: txData
+    };
+
+    const signedTx = await web3.eth.accounts.signTransaction(tx, PRIVATE_KEY);
+    const txReceipt = await web3.eth.sendSignedTransaction(signedTx.rawTransaction);
+
+    return txReceipt.transactionHash;
 }
 
 async function main() {
-  const seedPhrases = JSON.parse(process.env.SEED_PHRASES || '[]')
-  const privateKeys = JSON.parse(process.env.PRIVATE_KEYS || '[]')
+    const chains = Object.keys(RPC_URLS);
+    let iterationCount = 0;
 
-  let wallets = []
-  seedPhrases.forEach((mnemonic) => {
-    wallets.push(ethers.Wallet.fromPhrase(mnemonic.trim()))
-  })
-  privateKeys.forEach((privateKey) => {
-    wallets.push(new ethers.Wallet(privateKey.trim()))
-  })
+    while (iterationCount < ITERATIONS) {
+        const fromChain = chains[Math.floor(Math.random() * chains.length)];
+        let toChain;
+        do {
+            toChain = chains[Math.floor(Math.random() * chains.length)];
+        } while (toChain === fromChain); // Ensure fromChain and toChain are different
 
-  if (wallets.length === 0) {
-    console.error('No wallets found')
-    process.exit(1)
-  }
+        try {
+            console.log(`Bridging from ${fromChain} to ${toChain}...`);
+            const txHash = await bridge(fromChain, toChain, web3.utils.toWei('1', 'ether')); // Adjust amount as needed
+            console.log(`Transaction hash: ${txHash}`);
+        } catch (error) {
+            console.error(`Error: ${error}`);
+        }
 
-  wallets = wallets.map((wallet) => wallet.connect(provider))
-
-  const amountToSend = prompt('How much ETH do you want to send (in ETH): ')
-  const numAddresses = prompt('How many addresses do you want to send to: ')
-
-  const amountInWei = ethers.parseUnits(amountToSend, 'ether')
-  const gasPrice = await provider.getFeeData().then((feeData) => feeData.gasPrice)
-  console.log(gasPrice)
-
-  const delayBetweenTransactions = 4000
-
-  for (let i = 0; i < wallets.length; i++) {
-    const wallet = wallets[i]
-    const balance = await provider.getBalance(wallet.address)
-    const balanceInEth = ethers.formatEther(balance)
-    console.log(`Wallet ${wallet.address} balance: ${balanceInEth} ETH`)
-
-    if (parseFloat(balanceInEth) <= 0) {
-      console.error(`Wallet ${wallet.address} Insufficient balance . Skipping transactions for this wallet.`)
-      continue
+        iterationCount++;
+        await new Promise(resolve => setTimeout(resolve, INTERVAL)); // Wait before next bridge
     }
-
-    for (let j = 0; j < numAddresses; j++) {
-      const randomAddress = generateRandomAddress()
-      const tx = {
-        to: randomAddress,
-        value: amountInWei,
-        gasLimit: 2092522,
-        gasPrice: gasPrice,
-      }
-
-      try {
-        const txResponse = await wallet.sendTransaction(tx)
-        console.log(`Sent ${amountToSend} ETH from ${wallet.address} to ${randomAddress}`)
-        console.log(`Tx Hash: ${txResponse.hash}`)
-      } catch (error) {
-        console.error(`Failed to send transaction from ${wallet.address} to ${randomAddress}:`, error)
-      }
-
-      if (j < numAddresses - 1) {
-        await new Promise((resolve) => setTimeout(resolve, delayBetweenTransactions))
-      }
-    }
-
-    if (i < wallets.length - 1) {
-      await new Promise((resolve) => setTimeout(resolve, delayBetweenTransactions))
-    }
-  }
 }
 
-main()
+main();
