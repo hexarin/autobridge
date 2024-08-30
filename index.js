@@ -1,7 +1,7 @@
-const Web3 = require('web3');
-const { PRIVATE_KEY, WALLET_ADDRESS, ITERATIONS, INTERVAL } = process.env;
+const { ethers } = require('ethers');
+const prompt = require('prompt-sync')();
+require('dotenv').config();
 
-// Configuration
 const RPC_URLS = {
     base: 'https://base-sepolia-rpc.publicnode.com',
     arb: 'https://arbitrum-sepolia.infura.io/v3/a9068de0f8564411a3c7aeb6f2fb0c3e',
@@ -23,81 +23,124 @@ const BRIDGE_CONTRACTS = {
     op: '0xF221750e52aA080835d2957F2Eed0d5d7dDD8C38'
 };
 
-// ABI for all chains (Replace with actual ABI if different for each chain)
 const BRIDGE_ABIS = {
-    base: [{"inputs":[{"internalType":"address","name":"_logic","type":"address"},{"internalType":"address","name":"admin_","type":"address"},{"internalType":"bytes","name":"_data","type":"bytes"}],"stateMutability":"payable","type":"constructor"},{"anonymous":false,"inputs":[{"indexed":false,"internalType":"address","name":"previousAdmin","type":"address"},{"indexed":false,"internalType":"address","name":"newAdmin","type":"address"}],"name":"AdminChanged","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"beacon","type":"address"}],"name":"BeaconUpgraded","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"implementation","type":"address"}],"name":"Upgraded","type":"event"},{"stateMutability":"payable","type":"fallback"},{"stateMutability":"payable","type":"receive"}],
-    arb: [{"inputs":[{"internalType":"address","name":"_logic","type":"address"},{"internalType":"address","name":"admin_","type":"address"},{"internalType":"bytes","name":"_data","type":"bytes"}],"stateMutability":"payable","type":"constructor"},{"anonymous":false,"inputs":[{"indexed":false,"internalType":"address","name":"previousAdmin","type":"address"},{"indexed":false,"internalType":"address","name":"newAdmin","type":"address"}],"name":"AdminChanged","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"beacon","type":"address"}],"name":"BeaconUpgraded","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"implementation","type":"address"}],"name":"Upgraded","type":"event"},{"stateMutability":"payable","type":"fallback"},{"stateMutability":"payable","type":"receive"}],
-    blast: [{"inputs":[{"internalType":"address","name":"_logic","type":"address"},{"internalType":"address","name":"admin_","type":"address"},{"internalType":"bytes","name":"_data","type":"bytes"}],"stateMutability":"payable","type":"constructor"},{"anonymous":false,"inputs":[{"indexed":false,"internalType":"address","name":"previousAdmin","type":"address"},{"indexed":false,"internalType":"address","name":"newAdmin","type":"address"}],"name":"AdminChanged","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"beacon","type":"address"}],"name":"BeaconUpgraded","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"implementation","type":"address"}],"name":"Upgraded","type":"event"},{"stateMutability":"payable","type":"fallback"},{"stateMutability":"payable","type":"receive"}],
-    op: [{"inputs":[{"internalType":"address","name":"_logic","type":"address"},{"internalType":"address","name":"admin_","type":"address"},{"internalType":"bytes","name":"_data","type":"bytes"}],"stateMutability":"payable","type":"constructor"},{"anonymous":false,"inputs":[{"indexed":false,"internalType":"address","name":"previousAdmin","type":"address"},{"indexed":false,"internalType":"address","name":"newAdmin","type":"address"}],"name":"AdminChanged","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"beacon","type":"address"}],"name":"BeaconUpgraded","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"implementation","type":"address"}],"name":"Upgraded","type":"event"},{"stateMutability":"payable","type":"fallback"},{"stateMutability":"payable","type":"receive"}]
+    base: [
+        {"inputs":[{"internalType":"address","name":"_logic","type":"address"},{"internalType":"address","name":"admin_","type":"address"},{"internalType":"bytes","name":"_data","type":"bytes"}],"stateMutability":"payable","type":"constructor"},
+        {"anonymous":false,"inputs":[{"indexed":false,"internalType":"address","name":"previousAdmin","type":"address"},{"indexed":false,"internalType":"address","name":"newAdmin","type":"address"}],"name":"AdminChanged","type":"event"},
+        {"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"beacon","type":"address"}],"name":"BeaconUpgraded","type":"event"},
+        {"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"implementation","type":"address"}],"name":"Upgraded","type":"event"},
+        {"stateMutability":"payable","type":"fallback"},
+        {"stateMutability":"payable","type":"receive"}
+    ],
+    arb: [
+        {"inputs":[{"internalType":"address","name":"_logic","type":"address"},{"internalType":"address","name":"admin_","type":"address"},{"internalType":"bytes","name":"_data","type":"bytes"}],"stateMutability":"payable","type":"constructor"},
+        {"anonymous":false,"inputs":[{"indexed":false,"internalType":"address","name":"previousAdmin","type":"address"},{"indexed":false,"internalType":"address","name":"newAdmin","type":"address"}],"name":"AdminChanged","type":"event"},
+        {"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"beacon","type":"address"}],"name":"BeaconUpgraded","type":"event"},
+        {"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"implementation","type":"address"}],"name":"Upgraded","type":"event"},
+        {"stateMutability":"payable","type":"fallback"},
+        {"stateMutability":"payable","type":"receive"}
+    ],
+    blast: [
+        {"inputs":[{"internalType":"address","name":"_logic","type":"address"},{"internalType":"address","name":"admin_","type":"address"},{"internalType":"bytes","name":"_data","type":"bytes"}],"stateMutability":"payable","type":"constructor"},
+        {"anonymous":false,"inputs":[{"indexed":false,"internalType":"address","name":"previousAdmin","type":"address"},{"indexed":false,"internalType":"address","name":"newAdmin","type":"address"}],"name":"AdminChanged","type":"event"},
+        {"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"beacon","type":"address"}],"name":"BeaconUpgraded","type":"event"},
+        {"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"implementation","type":"address"}],"name":"Upgraded","type":"event"},
+        {"stateMutability":"payable","type":"fallback"},
+        {"stateMutability":"payable","type":"receive"}
+    ],
+    op: [
+        {"inputs":[{"internalType":"address","name":"_logic","type":"address"},{"internalType":"address","name":"admin_","type":"address"},{"internalType":"bytes","name":"_data","type":"bytes"}],"stateMutability":"payable","type":"constructor"},
+        {"anonymous":false,"inputs":[{"indexed":false,"internalType":"address","name":"previousAdmin","type":"address"},{"indexed":false,"internalType":"address","name":"newAdmin","type":"address"}],"name":"AdminChanged","type":"event"},
+        {"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"beacon","type":"address"}],"name":"BeaconUpgraded","type":"event"},
+        {"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"implementation","type":"address"}],"name":"Upgraded","type":"event"},
+        {"stateMutability":"payable","type":"fallback"},
+        {"stateMutability":"payable","type":"receive"}
+    ]
 };
 
-function getWeb3(chain) {
-    return new Web3(new Web3.providers.HttpProvider(RPC_URLS[chain]));
+function getProvider(chain) {
+    return new ethers.JsonRpcProvider(RPC_URLS[chain], CHAIN_IDS[chain]);
 }
 
-// Function to extract orderId from transaction receipt logs
-function extractOrderId(logs) {
-    for (const log of logs) {
-        const topics = log.topics;
-        if (topics.length > 0) {
-            // Assuming the orderId is in the second topic (1-indexed) in this example
-            return topics[1];
-        }
-    }
-    return null;
-}
+async function bridge(fromChain, toChain, amount, wallet) {
+    const provider = getProvider(fromChain);
+    const bridgeContract = new ethers.Contract(BRIDGE_CONTRACTS[fromChain], BRIDGE_ABIS[fromChain], wallet);
 
-async function bridge(fromChain, toChain, amount) {
-    const web3 = getWeb3(fromChain);
-    const bridgeContract = new web3.eth.Contract(BRIDGE_ABIS[fromChain], BRIDGE_CONTRACTS[fromChain]);
-
-    // Make sure 'bridge' method and parameters are correct
-    const txData = bridgeContract.methods.bridge(amount, toChain).encodeABI();
-    const gasPrice = await web3.eth.getGasPrice();
-    const nonce = await web3.eth.getTransactionCount(WALLET_ADDRESS);
+    // Ensure 'bridge' method and parameters are correct
+    const txData = bridgeContract.interface.encodeFunctionData('bridge', [amount, toChain]);
+    const gasPrice = await provider.getFeeData().then(feeData => feeData.gasPrice);
+    const nonce = await provider.getTransactionCount(wallet.address);
 
     const tx = {
-        from: WALLET_ADDRESS,
         to: BRIDGE_CONTRACTS[fromChain],
-        gas: 2000000,
+        gasLimit: 2000000,
         gasPrice: gasPrice,
         nonce: nonce,
         data: txData
     };
 
-    const signedTx = await web3.eth.accounts.signTransaction(tx, PRIVATE_KEY);
-    const txReceipt = await web3.eth.sendSignedTransaction(signedTx.rawTransaction);
+    try {
+        const txResponse = await wallet.sendTransaction(tx);
+        await txResponse.wait(); // Wait for the transaction to be mined
 
-    // Extract orderId from the transaction receipt logs
-    const orderId = extractOrderId(txReceipt.logs);
-    return {
-        transactionHash: txReceipt.transactionHash,
-        orderId: orderId
-    };
+        // Extract orderId from transaction receipt logs
+        const receipt = await provider.getTransactionReceipt(txResponse.hash);
+        const orderId = receipt.logs.find(log => log.topics.length > 0)?.topics[1] || null;
+
+        return {
+            transactionHash: txResponse.hash,
+            orderId: orderId
+        };
+    } catch (error) {
+        console.error(`Failed to bridge from ${wallet.address}:`, error);
+        throw error;
+    }
 }
 
 async function main() {
-    const chains = Object.keys(RPC_URLS);
-    let iterationCount = 0;
+    const seedPhrases = JSON.parse(process.env.SEED_PHRASES || '[]');
+    const privateKeys = JSON.parse(process.env.PRIVATE_KEYS || '[]');
 
-    while (iterationCount < ITERATIONS) {
-        const fromChain = chains[Math.floor(Math.random() * chains.length)];
+    let wallets = [];
+    seedPhrases.forEach((mnemonic) => {
+        wallets.push(ethers.Wallet.fromPhrase(mnemonic.trim()));
+    });
+    privateKeys.forEach((privateKey) => {
+        wallets.push(new ethers.Wallet(privateKey.trim()));
+    });
+
+    if (wallets.length === 0) {
+        console.error('No wallets found');
+        process.exit(1);
+    }
+
+    wallets = wallets.map((wallet) => wallet.connect(getProvider('base'))); // Connect to a default provider for wallet setup
+
+    const amountToBridge = prompt('How much ETH do you want to bridge (in ETH): ');
+    const numIterations = parseInt(prompt('How many iterations do you want to perform: '), 10);
+
+    const amountInWei = ethers.parseUnits(amountToBridge, 'ether');
+    const delayBetweenTransactions = 4000;
+
+    for (let i = 0; i < numIterations; i++) {
+        const fromChain = Object.keys(RPC_URLS)[Math.floor(Math.random() * Object.keys(RPC_URLS).length)];
         let toChain;
         do {
-            toChain = chains[Math.floor(Math.random() * chains.length)];
+            toChain = Object.keys(RPC_URLS)[Math.floor(Math.random() * Object.keys(RPC_URLS).length)];
         } while (toChain === fromChain); // Ensure fromChain and toChain are different
 
-        try {
-            console.log(`Bridging from ${fromChain} to ${toChain}...`);
-            const result = await bridge(fromChain, toChain, Web3.utils.toWei('1', 'ether')); // Adjust amount as needed
-            console.log(`Transaction hash: ${result.transactionHash}`);
-            console.log(`Order ID: ${result.orderId}`);
-        } catch (error) {
-            console.error(`Error: ${error}`);
-        }
+        for (let wallet of wallets) {
+            try {
+                console.log(`Bridging from ${fromChain} to ${toChain}...`);
+                const result = await bridge(fromChain, toChain, amountInWei, wallet);
+                console.log(`Transaction hash: ${result.transactionHash}`);
+                console.log(`Order ID: ${result.orderId}`);
+            } catch (error) {
+                console.error(`Error: ${error}`);
+            }
 
-        iterationCount++;
-        await new Promise(resolve => setTimeout(resolve, INTERVAL)); // Wait before next bridge
+            await new Promise(resolve => setTimeout(resolve, delayBetweenTransactions)); // Wait before next bridge
+        }
     }
 }
 
