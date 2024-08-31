@@ -1,18 +1,14 @@
 {
-  "dependencies": {
-    "dotenv": "^16.4.5",
-    "ethers": "^6.13.1",
-    "prompt-sync": "^4.2.0"
-  },
-  "name": "autosend",
+  "name": "bridge-bot",
   "version": "1.0.0",
+  "description": "A bot to bridge ETH between Base Sepolia and Arbitrum Sepolia using t3rn bridge.",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node index.js"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "description": ""
+  "dependencies": {
+    "ethers": "^6.0.0",
+    "prompt-sync": "^4.2.0",
+    "dotenv": "^16.0.0"
+  }
 }
